@@ -1,168 +1,172 @@
 ---
-title: "RepData_PeerAssessment1"
+title: "Reproducible Research Course Project 2"
 author: "Amber Zhang"
-date: "2018Äê10ÔÂ12ÈÕ"
+date: "2018å¹´10æœˆ15æ—¥"
 output: html_document
 ---
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Storms Exploration Based on the US National Oceanic and Atmospheric Administration's (NOAA)
+### **Synopsis**
+Storms and other severe weather events can cause both public health and economic
+problems for communities and municipalities. Many severe events can result in 
+fatalities, injuries, and property damage, and preventing such outcomes to the 
+extent possible is a key concern.
 
-## Download and read in activitiy data
-First we need to download the target data into the R work directory, then unzip
-and read in.
+This project involves exploring the U.S. National Oceanic and Atmospheric 
+Administration's (NOAA) storm database. The database explored in this study 
+tracks characteristics of major storms and weather events in the United States, 
+including when and where they occur, as well as estimates of any fatalities, 
+injuries, and property damage.
+
+The basic goal of this project is to explore the NOAA Storm Database and answer 
+some basic questions about severe weather events.
 
 
-```{r}
-unzip(zipfile = "repdata%2Fdata%2Factivity.zip")
-activityData <- read.csv(file = "activity.csv")
+### **Data Processing **
+#### Read in data
+
+```{r message=FALSE}
+packages <- c("lubridate", "data.table", "knitr", "ggplot2")
+lapply(packages, library, character.only = TRUE)
 ```
 
 
-## Calculate the total number of steps taken per day
-First we need to calculate the total number of steps taken per day.
-
-
-```{r}
-library(dplyr)
-totalPerday <- activityData %>%
-        select(steps, date) %>%
-        group_by(date) %>%
-        summarise(steps = sum(steps, na.rm = TRUE))
-head(totalPerday)
+```{r, cache=TRUE}
+url <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+if(!file.exists("Stormdata.csv.bz2")) 
+{download.file(url, destfile = "Stormdata.csv.bz2")}
+Sys.setlocale("LC_ALL", "English")
+stormData <- read.csv("Stormdata.csv.bz2")
+stormData <- as.data.table(stormData)
 ```
 
-
-## Make a histogram of the total number of steps taken each day
-The plot is made based on ggplot2 system.
-
+#### Target data subsetting
 
 ```{r}
-library(ggplot2)
-ggplot(totalPerday, aes(x = steps)) +
-        geom_histogram(fill = "purple", binwidth = 1000) +
-        labs(x = "Steps", y = "Frequency",
-             title = "Daily Steps")
-
-```
-
-
-## Calculate the mean and median of the total number of steps taken per day
-
-
-```{r}
-mean_step <- mean(totalPerday$steps, na.rm = TRUE)
-median_step <- median(totalPerday$steps, na.rm = TRUE)
-mean_step
-median_step
-```
-
-
-## The average daily activity pattern
-1. Make a time series plot of the 5-minute interval (x-axis) and the average 
-number of steps taken, averaged across all days (y-axis)
-
-
-```{r}
-avgpattern <- activityData %>%
-        select(steps, interval) %>%
-        group_by(interval) %>%
-        summarise(avgsteps = mean(steps, na.rm = TRUE))
-ggplot(avgpattern, aes(x = interval, y = avgsteps)) +
-        geom_line(color = "purple", size = 1) + 
-        labs(x = "Interval", y = "Avg. steps per day",
-             title = "Avg. daily steps")
-```
-
-
-## The maximum number of steps
-2.Which 5-minute interval, on average across all the days in the dataset, 
-contains the maximum number of steps?
-
-
-```{r}
-avgpattern %>%
-        slice(which.max(avgsteps))
-```
-
-
-## Imputing missing values
-1.Calculate and report the total number of missing values in the dataset
-
-
-```{r}
-totalNA <- sum(is.na(activityData))
-totalNA
-```
-
-
-## New dataset with missing data filled in 
-Create a new dataset that is equal to the original dataset but with the missing
-data filled in.
-
-
-```{r}
-filterNA <- activityData
-filterNA[is.na(filterNA)] <- 0
+# Subset data after 1996
+stormData$BGN_DATE <- as.Date(stormData$BGN_DATE, format = "%m/%d/%Y")
+after96 <- stormData[stormData$BGN_DATE >= ymd(19960101),]
+# Selecting columns
+filtercols <- after96[,c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP",
+                "CROPDMG", "CROPDMGEXP")]
+# Filtering occurred injuries or fatalities
+filter0values <- with(filtercols,filtercols[(EVTYPE != "?" & 
+                                     (INJURIES > 0 | FATALITIES > 0 |
+                                              PROPDMG > 0 | CROPDMG > 0)),])
+stormDT <- filter0values
 
 ```
 
 
-## Make a new  histogram  
-Make a histogram of the total number of steps taken each day and Calculate and 
-report the mean and median total number of steps taken per day. The values are 
-exactly the same as those of the fisrt step, because I set the is.NA arguement
-to TRUE.
-
+#### Cleaning data
 
 ```{r}
-totalPerday2 <- filterNA %>%
-        select(steps, date) %>%
-        group_by(date) %>%
-        summarise(steps = sum(steps, na.rm = TRUE))
-head(totalPerday2)
+# EVTYPE
+stormDT$EVTYPE <- toupper(stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(WIND).*", "WIND", stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(FIRE).*", "FIRE", stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(HEAT).*", "HEAT", stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(FLOOD).*", "FLOOD", stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(SNOW).*", "SNOW", stormDT$EVTYPE)
+stormDT$EVTYPE <- gsub(".*(LIGHTNING).*", "LIGHTNING", stormDT$EVTYPE)
+stormDT$EVTYPE <- as.factor(stormDT$EVTYPE)
+str(stormDT)
 ```
 
 
 ```{r}
-ggplot(totalPerday2, aes(x = steps)) +
-        geom_histogram(fill = "purple", binwidth = 1000) +
-        labs(x = "Steps", y = "Frequency",
-             title = "Daily Steps")
+#  PROPDMGEXP & CROPDMGEXP
+unique(stormDT$PROPDMGEXP)
+unique(stormDT$CROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub(pattern = "?|-|+", replacement = "0" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("1"    , "10",stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("H|h|2", "100" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("K|k|3", "1000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("4"    , "10000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("5"    , "100000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("M|m|6", "1000000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("7"    , "10000000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("8"    , "100000000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP<- gsub("B|b"  , "1000000000" ,stormDT$PROPDMGEXP)
+stormDT$PROPDMGEXP <- as.numeric(as.character(stormDT$PROPDMGEXP))
+sort(unique(stormDT$PROPDMGEXP))
+stormDT$PROPCOST <- stormDT$PROPDMG * stormDT$PROPDMGEXP
 ```
 
 
-## Are there differences in activity patterns between weekdays and weekends?
 
 
 ```{r}
-library(data.table)
-activityData <- fread("activity.csv")
-activityData[,date := as.POSIXct(date, format = "%Y-%m-%d")]
-activityData[,  `Day of Week`:= weekdays(x = date)]
-activityData[grepl(pattern = "ÐÇÆÚÒ»|ÐÇÆÚ¶þ|ÐÇÆÚÈý|ÐÇÆÚËÄ|ÐÇÆÚÎå", 
-                   x = `Day of Week`), "weekday or weekend"] <- "weekday"
-activityData[grepl(pattern = "ÐÇÆÚÁù|ÐÇÆÚÈÕ", x = `Day of Week`), 
-             "weekday or weekend"] <- "weekend"
-activityData[,`weekday or weekend` := as.factor(`weekday or weekend`)]
-head(activityData)
+# Crop 
+stormDT$CROPDMGEXP<- gsub("?", "0" ,stormDT$CROPDMGEXP)
+stormDT$CROPDMGEXP<- gsub("H|h|2", "100" ,stormDT$CROPDMGEXP)
+stormDT$CROPDMGEXP<- gsub("K|k|3", "1000" ,stormDT$CROPDMGEXP)
+stormDT$CROPDMGEXP<- gsub("M|m"  , "1000000" ,stormDT$CROPDMGEXP)
+stormDT$CROPDMGEXP<- gsub("B|b"  , "1000000000" ,stormDT$CROPDMGEXP)
+stormDT$CROPDMGEXP <- as.numeric(as.character(stormDT$CROPDMGEXP))
+sort(unique(stormDT$CROPDMGEXP))
+stormDT$CROPCOST <- stormDT$CROPDMG * stormDT$CROPDMGEXP
+```
+
+
+
+#### Making plot
+```{r}
+# Total property cost
+totalCost <- stormDT[, .(PROPCOST = sum(PROPCOST), CROPCOST = sum(CROPCOST),
+                     TOTALCOST = sum(PROPCOST) + sum(CROPCOST)),
+                     by = .(EVTYPE)]
+totalCost <- totalCost[order(-TOTALCOST),]
+totalCost <- totalCost[1 : 10,]
+head(totalCost, 5)
 ```
 
 
 ```{r}
-activityData[is.na(steps), "steps"] <- activityData[, c(lapply(.SD, median, na.rm = TRUE)), .SDcols = c("steps")]
-intervaldata <- activityData[, c(lapply(.SD, mean, na.rm = TRUE)), .SDcols = c("steps"), by = .(interval, `weekday or weekend`)] 
-ggplot(intervaldata, aes(x = interval, y = steps, 
-                         color = `weekday or weekend`)) +
-        geom_line() +
-        labs(title = "Avg. Daily Steps by Weektype", x = "Interval", 
-             y = "No. of Steps") +
-        facet_wrap(~`weekday or weekend` , ncol = 1, nrow=2)
-        
+# Total health cost 
+totalhealth <- stormDT[, .(FATALITIES = sum(FATALITIES), INJURIES = sum(INJURIES),
+                           TOTALHEALTH = sum(FATALITIES) + sum(INJURIES)),
+                       by = .(EVTYPE)]
+totalhealth <- totalhealth[order(-TOTALHEALTH),]
+totalhealth <- totalhealth[1:10,]
+head(totalhealth, 5)
 ```
 
 
+### **Results **
 
+
+```{r}
+# EVENTS WITH HIGHEST INJURIES
+ggplot(totalhealth, aes(x = EVTYPE, y = INJURIES)) +
+        geom_bar(stat = "identity") +
+        labs(title = "EVENTS WITH HIGHEST INJURIES")
+```
+
+
+```{r}
+# EVENTS WITH HIGHEST TATALITIES
+ggplot(totalhealth, aes(x = EVTYPE, y = FATALITIES)) +
+        geom_bar(stat = "identity") +
+        labs(title = "EVENTS WITH HIGHEST FATALITIES")
+```
+
+
+```{r}
+# EVENTS WITH HIGHEST PROPERTY DAMAGES
+ggplot(totalCost, aes(x = EVTYPE, y = PROPCOST)) +
+        geom_bar(stat = "identity") +
+        labs(title = "EVENTS WITH HIGHEST PROPERTY DAMAGES")
+```
+
+
+```{r}
+# EVENTS WITH HIGHEST CROP DAMAGES
+ggplot(totalCost, aes(x = EVTYPE, y = CROPCOST)) +
+        geom_bar(stat = "identity") +
+        labs(title = "EVENTS WITH HIGHEST CROP DAMAGES")
+```
